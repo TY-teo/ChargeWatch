@@ -8,6 +8,11 @@ struct MenuBarPanel: View {
     let onQuit: () -> Void
 
     @EnvironmentObject private var stream: SampleStream
+    @AppStorage("appTheme") private var themeRaw: String = AppTheme.classic.rawValue
+
+    private var theme: AppTheme {
+        AppTheme(rawValue: themeRaw) ?? .classic
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
@@ -20,18 +25,19 @@ struct MenuBarPanel: View {
         }
         .padding(AppSpacing.l)
         .frame(width: 360)
-        .background(AppColor.bgPrimary)
+        .panelBackground(theme: theme)
     }
 
     private var statusBanner: some View {
-        HStack(spacing: AppSpacing.m) {
-            Rectangle()
-                .fill(bannerColor)
-                .frame(width: 4, height: 36)
-                .cornerRadius(2)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: AppSpacing.s) {
+            Image(systemName: bannerIcon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(bannerColor)
+                .frame(width: 26, alignment: .center)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(stream.latest?.status.displayName ?? "采集中")
-                    .font(AppFont.panelBody)
+                    .font(AppFont.panelCaption)
                     .foregroundStyle(AppColor.textSecondary)
                 Text(bannerHeadline)
                     .font(AppFont.panelSubheadline)
@@ -47,6 +53,16 @@ struct MenuBarPanel: View {
         case .acPaused: return AppColor.chargingPaused
         case .discharging: return AppColor.discharging
         case .desktop, .none: return AppColor.chargingPaused
+        }
+    }
+
+    private var bannerIcon: String {
+        switch stream.latest?.status {
+        case .charging: return AppIcon.chargingActive
+        case .acPaused: return AppIcon.chargingPaused
+        case .discharging: return AppIcon.batterySymbol(for: stream.latest?.stateOfChargePercent)
+        case .desktop: return AppIcon.powerPlug
+        case .none: return AppIcon.chargingPaused
         }
     }
 
@@ -70,21 +86,25 @@ struct MenuBarPanel: View {
                 MetricCell(label: "充入电池",
                            value: stream.latest?.batteryWatts,
                            formatter: wattFormatter,
-                           accent: AppColor.chargingActive)
+                           accent: AppColor.chargingActive,
+                           theme: theme)
                 MetricCell(label: "墙插输出",
                            value: stream.latest?.wallOutputWatts,
                            formatter: wattFormatter,
-                           accent: AppColor.textPrimary)
+                           accent: AppColor.textPrimary,
+                           theme: theme)
             }
             GridRow {
                 MetricCell(label: "系统负载",
                            value: stream.latest?.systemLoadWatts,
                            formatter: wattFormatter,
-                           accent: AppColor.textPrimary)
+                           accent: AppColor.textPrimary,
+                           theme: theme)
                 MetricCell(label: "电池电量",
                            value: stream.latest?.stateOfChargePercent.map(Double.init),
                            formatter: percentFormatter,
-                           accent: AppColor.textPrimary)
+                           accent: AppColor.textPrimary,
+                           theme: theme)
             }
         }
     }
@@ -102,26 +122,52 @@ struct MenuBarPanel: View {
         }
         .padding(AppSpacing.s)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColor.bgTertiary)
-        .cornerRadius(AppRadius.s)
+        .cardSurface(theme: theme, radius: AppRadius.s)
     }
 
     private var sparkline: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("最近 60 秒")
-                .font(AppFont.panelLabel)
-                .foregroundStyle(AppColor.textSecondary)
-            Chart(stream.rolling.suffix(60).enumerated().map(SparkPoint.init)) { p in
+        let points = Array(stream.rolling.suffix(60).enumerated().map(SparkPoint.init))
+        let lastID = points.last?.id
+        let currentW = points.last?.y
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("最近 60 秒")
+                    .font(AppFont.panelLabel)
+                    .foregroundStyle(AppColor.textSecondary)
+                Spacer()
+                if let currentW {
+                    Text(String(format: "%.1f W", currentW))
+                        .font(AppFont.chartAxis)
+                        .foregroundStyle(sparkColor)
+                }
+            }
+            Chart(points) { p in
                 LineMark(x: .value("idx", p.x), y: .value("W", p.y))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(sparkColor)
                 AreaMark(x: .value("idx", p.x), y: .value("W", p.y))
                     .interpolationMethod(.monotone)
                     .foregroundStyle(sparkColor.opacity(0.18))
+                if p.id == lastID {
+                    PointMark(x: .value("idx", p.x), y: .value("W", p.y))
+                        .foregroundStyle(sparkColor)
+                        .symbolSize(26)
+                }
             }
             .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .frame(height: 60)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(AppColor.divider)
+                    AxisValueLabel {
+                        if let w = value.as(Double.self) {
+                            Text("\(Int(w.rounded()))")
+                                .font(AppFont.chartAxis)
+                                .foregroundStyle(AppColor.textSecondary)
+                        }
+                    }
+                }
+            }
+            .frame(height: 64)
         }
     }
 
@@ -163,6 +209,7 @@ private struct MetricCell: View {
     let value: Double?
     let formatter: (Double) -> String
     let accent: Color
+    let theme: AppTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
@@ -180,8 +227,7 @@ private struct MetricCell: View {
         }
         .padding(AppSpacing.m)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .background(AppColor.bgSecondary)
-        .cornerRadius(AppRadius.m)
+        .cardSurface(theme: theme)
     }
 
     private var unitText: String {

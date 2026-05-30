@@ -55,7 +55,25 @@ enum AppSpacing { static let xs = 4.0; static let s = 8.0; static let m = 12.0; 
 enum AppRadius  { static let s = 6.0; static let m = 10.0; static let l = 14.0 }
 ```
 
-### 2.4 图标库锁定
+### 2.4 主题系统（v0.2 新增）
+
+**主题枚举**：
+
+| 主题 | 菜单栏面板背景 | 历史/设置窗口背景 |
+|---|---|---|
+| `classic`（默认） | `AppColor.bgPrimary`（系统不透明） | `AppColor.bgPrimary`（系统不透明） |
+| `vibrancy` | `NSVisualEffectView(.popover, .behindWindow)` 磨砂 | `NSVisualEffectView(.sidebar, .behindWindow)` + `Color.accentColor.opacity(0.12)` tint |
+
+**关键约束**：
+- 玻璃主题下窗口必须 `window.isOpaque = false` + `window.backgroundColor = .clear` + `titlebarAppearsTransparent = true`
+- 不得硬编码 hex 蓝色；蓝色 tint 用 `Color.accentColor.opacity(0.12)` 叠加在 sidebar 材质上
+- 玻璃主题下 sparkline / 历史折线必须与磨砂背景保持对比度（线宽 +0.5pt，添加 1pt 描边）
+- 主题切换实时生效，无需重启 app（用 `@AppStorage("appTheme")` 驱动）
+- 默认值是 `classic`，与 v0.1.0 视觉完全一致（升级用户不会感到突变）
+
+**持久化**：UserDefaults key = `appTheme`，值 = `"classic"` / `"vibrancy"`
+
+### 2.5 图标库锁定
 
 **唯一来源：SF Symbols 5（系统自带）**
 
@@ -241,3 +259,61 @@ ChargeWatch
 - [ ] 深色 / 浅色模式都在 SwiftUI Preview 里验证过
 - [ ] 数字使用 `monospacedDigit()` 防止抖动
 - [ ] 主操作按钮 `accessibilityLabel` 已写
+
+## 12. v0.3 重设计（磨砂协调 + 数据真实性）
+
+> 触发：用户反馈现有 UI 在磨砂面板下不协调，且充电瞬间「充入电池」瓦数不实时。设计北极星 = macOS 原生控制中心（电池 / Wi-Fi 弹窗）：磨砂底 + 半透明分组瓦片 + 细分隔线 + 无左侧色条。参考图见 `reference/`。
+
+### 12.1 卡片材质系统（替换不透明 controlBackgroundColor）
+
+新增主题感知卡片表面 `cardSurface(theme:)`，所有指标卡 / 适配器行 / 设置分组统一使用：
+
+| 主题 | 卡片填充 | 描边（hairline） |
+|---|---|---|
+| `classic` | `AppColor.bgSecondary`（系统不透明，保持 v0.2 观感） | `Color.primary.opacity(0.05)` 1px |
+| `vibrancy` | `.ultraThinMaterial`（半透明磨砂瓦片，透出面板底纹） | `Color.primary.opacity(0.08)` 1px |
+
+- 圆角沿用 `AppRadius.m`（10pt），适配器行 `AppRadius.s`。
+- 磨砂态下卡片不再是「白底块」，而是与面板同质的磨砂瓦片，达到原生控制中心协调感。
+- 硬约束：禁止再在视图层直接 `.background(AppColor.bgSecondary)` 充当卡片；一律走 `cardSurface(theme:)`。
+
+### 12.2 状态横幅重设计（去掉左侧竖色条）
+
+- **移除** `Rectangle().frame(width: 4, height: 36)` 竖色条。
+- 改为「状态图标瓦片 + 双行文字」原生布局：
+  - 左：28×28 圆角瓦片（`AppRadius.s`），填充 `状态色.opacity(0.16)`，内置 SF Symbol（充电=`bolt.fill`、暂停=`bolt.slash.fill`、放电=动态电池符号、市电=`powerplug.fill`），图标着状态色。
+  - 右：上行状态名（`panelCaption`，`textSecondary`）；下行主数字（`panelSubheadline` 18pt，`textPrimary`）。
+- 颜色仍来自 `AppColor` 语义色，不新增硬编码。
+
+### 12.3 Sparkline 数值标注（最近 60 秒）
+
+- 取消 `.chartYAxis(.hidden)`：
+  - 启用 `.chartYAxis` `AxisMarks(desiredCount: 3)`，`chartAxis` 字号、`textSecondary`，hairline 网格线（`divider`）。
+- 标题行右侧追加当前值 `xx.x W`（`panelLabel`/`textSecondary`），随最新采样实时更新（「曲线旁数值标注」）。
+- 曲线末端加 `PointMark` 端点圆点（状态色），锚定当前读数位置。
+- X 轴仍隐藏，保持紧凑。
+
+### 12.4 设置窗玻璃外观重设计
+
+- `windowBackground(.vibrancy)`：**去掉** `Color.accentColor.opacity(0.12)` 的厚重蓝色 tint，材质由 `.sidebar` 改为更干净的 `.underWindowBackground`（无蓝色水洗）。
+- `ThemeWindowConfigurator.prepareForThemeable` 补齐玻璃必需项：`titlebarAppearsTransparent = true` + `titleVisibility = .hidden`（仅 vibrancy 需要透明标题栏，glass 才不脏）。
+- 各设置分组（外观 / 通用 / 数据）用 `cardSurface(theme:)` 包裹，形成原生分组卡片层级。
+
+### 12.5 数据真实性修复（充入电池实时瓦数）
+
+非 UI，但属本次同源修复，记录于此以便回归：
+
+- 根因 1：`batteryWatts` 用顶层 `Amperage`（多秒滚动平均），刚插充电器时严重滞后，而 sparkline 的系统负载分支用瞬时 `SystemLoad`，造成「图在跳、瓦数不动」。
+- 根因 2：`readInt` 用 `NSNumber.intValue`(Int32) 解码接近 2⁶⁴ 的遥测无符号大值会错位，导致系统负载显示负值。
+- 修复：电池功率幅度优先取瞬时 `PowerTelemetryData.BatteryPower` → 回退 `Voltage×InstantAmperage` → 回退 `Voltage×Amperage`；方向由 `isCharging` 决定（充电为正）。遥测字段统一 `readSignedInt`(int64) 解码 + 取绝对值幅度。
+
+### 12.6 v0.3 预览反馈修订
+
+针对第一轮预览反馈的二次调整：
+
+- **窗口标题栏**：撤销 `titlebarAppearsTransparent`（曾导致标题栏整条透明、窗口无法拖动）。改为保留系统标题栏（可见、可拖拽），玻璃感仅由内容区材质提供。
+- **玻璃亮度**：玻璃主题统一强制浅色外观——`VisualEffectView.forceAqua = true`（材质走浅色变体，更亮）+ 内容 `environment(\.colorScheme, .light)`。解决「切到玻璃后整体偏暗」。
+- **配色回归经典**：强制浅色后，`chargingActive` / `discharging` / sparkline 颜色不再走暗模式霓虹变体，回到经典浅色配色（绿 `#1F9E4A` / 橙 `#C2410C`），与原生参考一致。
+- **状态图标**：移除状态横幅图标的 `状态色.opacity(0.16)` 圆角色块底衬（放电态被感知为电池周围「阴影」）。改为纯 SF Symbol（放电=单个电池符号）着状态色，无背景块。
+- **卡片亮度**：玻璃态卡片由 `.ultraThinMaterial` 调整为 `Color.white.opacity(0.5)` 叠 `.regularMaterial` + `black.opacity(0.06)` hairline，瓦片更亮更清晰。
+- **文案**：玻璃主题描述去掉「蓝色 tint」表述。

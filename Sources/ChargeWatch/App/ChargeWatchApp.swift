@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             win.setContentSize(NSSize(width: 720, height: 480))
             win.center()
             win.isReleasedWhenClosed = false
+            ThemeWindowConfigurator.prepareForThemeable(win)
             historyWindow = win
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -70,9 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let win = NSWindow(contentViewController: hosting)
             win.title = "ChargeWatch · 设置"
             win.styleMask = [.titled, .closable]
-            win.setContentSize(NSSize(width: 480, height: 320))
+            win.setContentSize(NSSize(width: 480, height: 360))
             win.center()
             win.isReleasedWhenClosed = false
+            ThemeWindowConfigurator.prepareForThemeable(win)
             settingsWindow = win
         }
         NSApp.activate(ignoringOtherApps: true)

@@ -25,6 +25,7 @@ mkdir -p "$MACOS" "$RESOURCES"
 cp "$BIN" "$MACOS/chargewatch"
 chmod +x "$MACOS/chargewatch"
 cp Resources/Info.plist "$CONTENTS/Info.plist"
+cp Resources/AppIcon.icns "$RESOURCES/AppIcon.icns"
 
 # Copy SPM resource bundle if present
 BUNDLE_RES=".build/release/chargewatch_ChargeWatch.bundle"

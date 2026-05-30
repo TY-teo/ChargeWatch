@@ -4,10 +4,15 @@ import AppKit
 
 struct HistoryWindow: View {
     @EnvironmentObject private var repoHolder: SampleRepositoryHolder
+    @AppStorage("appTheme") private var themeRaw: String = AppTheme.classic.rawValue
     @State private var range: TimeRange = .today
     @State private var points: [TimeSeriesPoint] = []
     @State private var stats: AggregateStats = .zero
     @State private var isLoading = false
+
+    private var theme: AppTheme {
+        AppTheme(rawValue: themeRaw) ?? .classic
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,7 +22,8 @@ struct HistoryWindow: View {
             Divider()
             statsBar
         }
-        .background(AppColor.bgPrimary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .windowBackground(theme: theme)
         .task(id: range) { await reload() }
     }
 
