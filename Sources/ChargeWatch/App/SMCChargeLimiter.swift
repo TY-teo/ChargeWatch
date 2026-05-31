@@ -13,8 +13,8 @@ final class SMCChargeLimiter: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var lastError: String?
 
-    /// CHIE 路径可做任意上限（含 <80%，系统原生做不到的区间）。
-    static let steps: [Int] = [50, 60, 70, 80, 90]
+    /// 充电上限档位（80%–100%，100=不限制/充满）。
+    static let steps: [Int] = [80, 85, 90, 95, 100]
 
     private let configDir = "/Users/Shared/ChargeWatch"
     private let configPath = "/Users/Shared/ChargeWatch/smc-limit.json"

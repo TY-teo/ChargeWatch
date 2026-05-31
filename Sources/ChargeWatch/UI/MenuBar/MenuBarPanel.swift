@@ -21,11 +21,12 @@ struct MenuBarPanel: View {
             adapterRow
             sparkline
             SMCChargeLimitSection()
+            Spacer(minLength: 0)
             Divider()
             actionRow
         }
         .padding(AppSpacing.l)
-        .frame(width: 360)
+        .frame(width: 360, height: 640, alignment: .top)
         .panelBackground(theme: theme)
     }
 

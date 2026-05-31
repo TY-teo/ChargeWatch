@@ -17,8 +17,8 @@ struct SMCChargeLimitSection: View {
     /// 落定时的瞬时缩放脉冲，代替触觉反馈（macOS 13 无 sensoryFeedback）。
     @State private var commitPulse = false
 
-    /// 与 SMCChargeLimiter.steps（50/60/70/80/90）对齐：5% 步进、50...90 区间。
-    private static let sliderRange: ClosedRange<Double> = 50...90
+    /// 与 SMCChargeLimiter.steps（80/85/90/95/100）对齐：5% 步进、80...100 区间。
+    private static let sliderRange: ClosedRange<Double> = 80...100
     private static let sliderStep: Double = 5
     private static let tickValues: [Int] = SMCChargeLimiter.steps
 
