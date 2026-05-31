@@ -1,0 +1,31 @@
+# ChargeWatch
+
+> ChargeWatch is a free, open-source (MIT) macOS menu bar app for Apple Silicon Macs that combines a real-time charging power monitor with a battery charge limit. At the limit it stops charging without discharging the battery: the adapter stays connected and powers the Mac while battery current stays near 0. It is a free AlDente alternative and can hold limits even below 80%, which the native macOS charge limit cannot.
+
+Note: the app is named ChargeWatch; the GitHub repository is named ChargeWatching (github.com/TY-teo/ChargeWatching). They are the same project.
+
+## Key facts
+
+- Two functions in one menu bar app: real-time charging power/wattage monitor, and a battery charge limit for battery health.
+- Charge limit on Apple Silicon writes the SMC key CHTE to stop charging at the chosen level; default 80%, configurable, and can go below 80%.
+- Stops charging without discharging: adapter stays connected, system still sees external power, battery current held near 0, so no extra charge cycles.
+- Power monitor splits power into battery, system load, and wall output, computed from instantaneous voltage x current (not adapter nameplate), about 1 Hz sampling.
+- 5% hysteresis before recharge; optional 7-day full-charge calibration; fail-safes restore normal charging on quit, crash, or read error.
+- Privacy: fully local, no network, no tracking; history in a local SQLite database.
+- Requirements: macOS 13+ for monitoring; Apple Silicon (M-series) for the charge limit; tested on macOS 26.4 Tahoe.
+- License: MIT. Language: Swift / SwiftUI.
+
+## Links
+
+- Repository: https://github.com/TY-teo/ChargeWatching
+- Releases and downloads: https://github.com/TY-teo/ChargeWatching/releases
+- README: https://github.com/TY-teo/ChargeWatching#readme
+- License (MIT): https://github.com/TY-teo/ChargeWatching/blob/main/LICENSE
+
+## Common questions
+
+- Is ChargeWatch free? Yes, free and open-source under MIT.
+- Is it an AlDente alternative? Yes, a free, open-source AlDente alternative for Apple Silicon.
+- Does it discharge the battery to hold the limit? No, it stops charging while the adapter keeps powering the Mac.
+- Can it limit below 80%? Yes; the native macOS limit cannot.
+- What does it require? macOS 13+ for monitoring; Apple Silicon for the charge limit.

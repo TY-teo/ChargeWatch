@@ -14,12 +14,35 @@
 
 <table>
   <tr>
-    <td><img src="picture/charge-limit-redesign-light.png" width="420" alt="ChargeWatch 浅色面板：充电功率监控与充电上限滑块" /></td>
-    <td><img src="picture/charge-limit-redesign-dark.png" width="420" alt="ChargeWatch 深色面板：充电功率监控与充电上限滑块" /></td>
+    <td><img src="picture/charge-limit-redesign-light.png" width="420" alt="ChargeWatch menu bar panel on macOS showing real-time charging power, system load and wall output (light mode)" /></td>
+    <td><img src="picture/charge-limit-redesign-dark.png" width="420" alt="Setting a battery charge limit in ChargeWatch, a free open-source AlDente alternative for Apple Silicon (dark mode)" /></td>
   </tr>
 </table>
 
 </div>
+
+---
+
+## What is ChargeWatch
+
+ChargeWatch is a free, open-source (MIT) macOS menu bar app for Apple Silicon Macs that does two things at once: it shows real-time charging power and it sets a battery charge limit. When the limit is reached, ChargeWatch stops charging without discharging the battery — the Mac runs straight off the power adapter while battery current stays near 0. It is a free AlDente alternative, and it can hold limits even below 80%, which the native macOS battery charge limit cannot.
+
+> Repository note: the app is named **ChargeWatch**; the GitHub repository is **ChargeWatching** (`github.com/TY-teo/ChargeWatching`). They are the same project. The ChargeWatch app lives in the ChargeWatching repository.
+
+ChargeWatch combines two jobs that other tools usually keep separate. Most battery tools either limit charging (AlDente, batt, Battery Toolkit) or monitor power (coconutBattery, Watts, Stats) — ChargeWatch is a single menu bar app that does both.
+
+Key facts for quick reference:
+
+- macOS menu bar charging power monitor: splits power into battery, system load, and wall output, computed from instantaneous voltage x current (not adapter nameplate ratings), sampled at about 1 Hz.
+- macOS battery charge limit on Apple Silicon: writes the SMC charge-control key `CHTE` to stop charging at your limit (default 80%, configurable, can go below 80%) with no kernel extension and no Shortcuts dependency.
+- Stop charging without discharging: at the limit the adapter stays connected, the system still sees external power, and the battery is held at roughly 0 current — no extra charge cycles.
+- 5% hysteresis before recharge, optional 7-day full-charge calibration, and multiple fail-safes that restore normal charging on quit, crash, or any read error.
+- Fully local and private: no network, no tracking; history stays in a local SQLite database.
+- Requirements: macOS 13 or later for power monitoring; Apple Silicon (M-series) for the charge limit. Tested on macOS 26.4 Tahoe + Apple Silicon.
+
+Keywords: ChargeWatch, ChargeWatch GitHub, macOS battery charge limit, battery charge limiter Apple Silicon, menu bar charging power monitor, charging wattage in the menu bar, free open-source AlDente alternative, stop charging without discharging, limit MacBook charging to 80% or below.
+
+[中文说明见下。Chinese documentation follows.]
 
 ---
 
@@ -285,6 +308,60 @@ sudo bash scripts/install-helper.sh uninstall
 - 直接读写 SMC 属于底层操作，不同机型 / 系统版本的键支持情况可能有差异；不支持 `CHTE` 的机型会退化为断适配器兜底方案。
 - 功率读数为每秒一次的瞬时快照，不是连续能量积分。
 - 已在 macOS 26.4 Tahoe + Apple Silicon 实测，其它版本组合可能存在差异。
+
+---
+
+## ChargeWatch vs AlDente vs batt vs Battery Toolkit vs native macOS
+
+All five can limit charging on Apple Silicon. The honest differences:
+
+| | ChargeWatch | AlDente | batt | Battery Toolkit | Native macOS 26.4 |
+| --- | --- | --- | --- | --- | --- |
+| Price | Free | Free tier + paid Pro | Free | Free | Built in |
+| Open source | Yes (MIT) | No | Yes (GPL-3.0) | Yes (BSD-3) | No |
+| Interface | Menu bar app | Menu bar app | CLI | Menu bar app | System Settings |
+| Charge limit | Any %, incl. below 80% | Any % | Any % | Any % | 80% only |
+| Real-time wattage monitor | Yes (battery / system / wall) | Limited | No | No | No |
+| Stop charging without discharging | Yes (CHTE) | Yes | Yes | Yes | Yes |
+| Power history + CSV export | Yes | No | No | No | No |
+
+ChargeWatch's niche: it is the free, open-source option that combines a charge limit (including below 80%) with a real-time charging power monitor and history in one menu bar app. If you only need a simple 80% cap, the native macOS setting is enough; if you want detailed wattage plus a sub-80% limit for free, ChargeWatch is built for that. Tool facts (pricing, license, platform) may change over time — verify on each project's page.
+
+---
+
+## FAQ
+
+### Is ChargeWatch free and open source? / ChargeWatch 是免费开源的吗？
+Yes. ChargeWatch is free and open-source under the MIT License. There is no paid tier and no in-app purchase.
+是的。ChargeWatch 基于 MIT 许可证免费开源，没有付费版，也没有内购。
+
+### Is ChargeWatch a free AlDente alternative? / ChargeWatch 是 AlDente 的免费替代品吗？
+Yes. ChargeWatch is a free, open-source AlDente alternative for Apple Silicon Macs. It sets a battery charge limit and also shows real-time charging wattage in the menu bar, which AlDente does not focus on.
+是的。ChargeWatch 是面向 Apple Silicon 的免费开源 AlDente 替代品，既能设充电上限，又能在菜单栏显示实时充电瓦数。
+
+### How do I set a battery charge limit on macOS? / 如何在 macOS 上设置电池充电上限？
+Open the ChargeWatch menu bar panel, drag the charge-limit slider to your target percentage (60%–80% is a good range), and turn the limit on. You enter your admin password once to install the helper, then it works automatically.
+打开 ChargeWatch 菜单栏面板，拖动充电上限滑块到目标百分比（建议 60%–80%），再打开上限开关。首次输入一次管理员密码安装守护进程，之后自动生效。
+
+### Can ChargeWatch limit charging below 80%? / ChargeWatch 能把上限设到 80% 以下吗？
+Yes. ChargeWatch can hold a charge limit below 80%. The native macOS 26.4 charge limit only goes down to 80%, so ChargeWatch gives finer control.
+可以。ChargeWatch 支持低于 80% 的充电上限；macOS 26.4 自带的上限最低只能到 80%，ChargeWatch 控制更细。
+
+### Does ChargeWatch discharge the battery to hold the limit? / ChargeWatch 会靠放电来维持上限吗？
+No. ChargeWatch stops charging while keeping the adapter connected, so the battery is not discharged to hold the limit. Battery current stays near 0 and the Mac runs on adapter power.
+不会。ChargeWatch 是停止充电、同时保持适配器连接，不靠放电维持上限；电池电流接近 0，整机由适配器供电。
+
+### Which Macs and macOS versions are supported? / 支持哪些 Mac 和 macOS 版本？
+Power monitoring works on macOS 13 and later. The battery charge limit requires an Apple Silicon (M-series) Mac and is tested on macOS 26.4 Tahoe.
+功率监控支持 macOS 13 及以上；充电上限需要 Apple Silicon（M 系列）Mac，已在 macOS 26.4 Tahoe 实测。
+
+### Does ChargeWatch collect any data? / ChargeWatch 会收集数据吗？
+No. ChargeWatch is fully local with no network access and no tracking. All history stays in a local SQLite database on your Mac.
+不会。ChargeWatch 完全本地运行，不联网、不追踪；所有历史保存在本机 SQLite 数据库。
+
+### How is ChargeWatch different from the native macOS charge limit? / 和 macOS 自带的充电上限有什么区别？
+The native macOS 26.4 limit is 80% only and shows no power detail. ChargeWatch lets you pick any limit (including below 80%), adds a real-time wattage monitor, history, and CSV export.
+macOS 26.4 自带上限只有 80% 且无功率细节；ChargeWatch 可设任意上限（含 80% 以下），还提供实时瓦数、历史与 CSV 导出。
 
 ---
 
