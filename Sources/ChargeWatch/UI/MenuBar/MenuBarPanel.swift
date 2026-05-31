@@ -1,6 +1,11 @@
 import SwiftUI
 import Charts
 
+/// 菜单栏弹出面板。采用 StayAwake 同款"系统玻璃"风格：vibrancy 主题下用系统 popover
+/// 材质透出桌面，内部分组全部使用原生 `GroupBox`，控件用原生 `LabeledContent` /
+/// `Button .controlSize(.large)`，文字一律 `.primary` / `.secondary`；仅保留唯一一处
+/// 语义强调色（充电功率用系统级绿色），其余跟随系统外观。固定 360x640 尺寸、操作行钉底，
+/// 避免 sparkline 每秒重绘引起的外框抖动。
 struct MenuBarPanel: View {
     let onOpenHistory: () -> Void
     let onOpenSettings: () -> Void
@@ -17,9 +22,8 @@ struct MenuBarPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
             statusBanner
-            metricsGrid
-            adapterRow
-            sparkline
+            metricsGroup
+            sparklineGroup
             SMCChargeLimitSection()
             Spacer(minLength: 0)
             Divider()
@@ -30,32 +34,27 @@ struct MenuBarPanel: View {
         .panelBackground(theme: theme)
     }
 
+    // MARK: - 状态横幅
+
     private var statusBanner: some View {
         HStack(spacing: AppSpacing.s) {
             Image(systemName: bannerIcon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(bannerColor)
-                .frame(width: 26, alignment: .center)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 30, alignment: .center)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(stream.latest?.status.displayName ?? "采集中")
-                    .font(AppFont.panelCaption)
-                    .foregroundStyle(AppColor.textSecondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Text(bannerHeadline)
-                    .font(AppFont.panelSubheadline)
-                    .foregroundStyle(AppColor.textPrimary)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(bannerHeadlineColor)
+                    .monospacedDigit()
             }
             Spacer()
         }
-    }
-
-    private var bannerColor: Color {
-        switch stream.latest?.status {
-        case .charging: return AppColor.chargingActive
-        case .acPaused: return AppColor.chargingPaused
-        case .discharging: return AppColor.discharging
-        case .desktop, .none: return AppColor.chargingPaused
-        }
+        .padding(.horizontal, 2)
     }
 
     private var bannerIcon: String {
@@ -66,6 +65,11 @@ struct MenuBarPanel: View {
         case .desktop: return AppIcon.powerPlug
         case .none: return AppIcon.chargingPaused
         }
+    }
+
+    /// 唯一一处语义强调色：充电中的功率读数用系统级绿色，其余跟随系统主文字色。
+    private var bannerHeadlineColor: Color {
+        stream.latest?.status == .charging ? AppColor.chargingActive : .primary
     }
 
     private var bannerHeadline: String {
@@ -82,104 +86,137 @@ struct MenuBarPanel: View {
         }
     }
 
-    private var metricsGrid: some View {
-        Grid(horizontalSpacing: AppSpacing.s, verticalSpacing: AppSpacing.s) {
-            GridRow {
-                MetricCell(label: "充入电池",
-                           value: stream.latest?.batteryWatts,
-                           formatter: wattFormatter,
-                           accent: AppColor.chargingActive,
-                           theme: theme)
-                MetricCell(label: "墙插输出",
-                           value: stream.latest?.wallOutputWatts,
-                           formatter: wattFormatter,
-                           accent: AppColor.textPrimary,
-                           theme: theme)
+    // MARK: - 指标分组（原生 GroupBox + LabeledContent 行）
+
+    private var metricsGroup: some View {
+        GroupBox {
+            VStack(spacing: AppSpacing.s) {
+                metricRow(label: "充入电池",
+                          value: stream.latest?.batteryWatts,
+                          unit: "W",
+                          formatter: wattText,
+                          highlight: stream.latest?.status == .charging)
+                Divider()
+                metricRow(label: "墙插输出",
+                          value: stream.latest?.wallOutputWatts,
+                          unit: "W",
+                          formatter: wattText,
+                          highlight: false)
+                Divider()
+                metricRow(label: "系统负载",
+                          value: stream.latest?.systemLoadWatts,
+                          unit: "W",
+                          formatter: wattText,
+                          highlight: false)
+                Divider()
+                metricRow(label: "电池电量",
+                          value: stream.latest?.stateOfChargePercent.map(Double.init),
+                          unit: "%",
+                          formatter: percentText,
+                          highlight: false)
+                Divider()
+                adapterRow
             }
-            GridRow {
-                MetricCell(label: "系统负载",
-                           value: stream.latest?.systemLoadWatts,
-                           formatter: wattFormatter,
-                           accent: AppColor.textPrimary,
-                           theme: theme)
-                MetricCell(label: "电池电量",
-                           value: stream.latest?.stateOfChargePercent.map(Double.init),
-                           formatter: percentFormatter,
-                           accent: AppColor.textPrimary,
-                           theme: theme)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func metricRow(label: String,
+                           value: Double?,
+                           unit: String,
+                           formatter: (Double) -> String,
+                           highlight: Bool) -> some View {
+        LabeledContent {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value.map(formatter) ?? "--")
+                    .font(.body.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(highlight ? AppColor.chargingActive : .primary)
+                Text(unit)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+        } label: {
+            Text(label)
+                .foregroundStyle(.secondary)
         }
     }
 
     private var adapterRow: some View {
-        HStack(spacing: AppSpacing.s) {
-            Image(systemName: AppIcon.powerPlug)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppColor.textSecondary)
+        LabeledContent {
             Text(stream.latest?.adapterDescription ?? "未检测到适配器")
-                .font(AppFont.panelCaption)
-                .foregroundStyle(AppColor.textSecondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer()
+                .truncationMode(.middle)
+        } label: {
+            Label("适配器", systemImage: AppIcon.powerPlug)
+                .foregroundStyle(.secondary)
+                .labelStyle(.titleAndIcon)
         }
-        .padding(AppSpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface(theme: theme, radius: AppRadius.s)
     }
 
-    private var sparkline: some View {
+    // MARK: - 最近 60 秒（原生 GroupBox 包裹，固定高度避免抖动）
+
+    private var sparklineGroup: some View {
         let points = Array(stream.rolling.suffix(60).enumerated().map(SparkPoint.init))
         let lastID = points.last?.id
         let currentW = points.last?.y
-        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("最近 60 秒")
-                    .font(AppFont.panelLabel)
-                    .foregroundStyle(AppColor.textSecondary)
-                Spacer()
-                if let currentW {
-                    Text(String(format: "%.1f W", currentW))
-                        .font(AppFont.chartAxis)
-                        .foregroundStyle(sparkColor)
+        return GroupBox {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("最近 60 秒")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if let currentW {
+                        Text(String(format: "%.1f W", currentW))
+                            .font(.callout.weight(.medium))
+                            .monospacedDigit()
+                            .foregroundStyle(sparkColor)
+                    }
                 }
-            }
-            Chart(points) { p in
-                LineMark(x: .value("idx", p.x), y: .value("W", p.y))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(sparkColor)
-                AreaMark(x: .value("idx", p.x), y: .value("W", p.y))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(sparkColor.opacity(0.18))
-                if p.id == lastID {
-                    PointMark(x: .value("idx", p.x), y: .value("W", p.y))
+                .font(.subheadline)
+
+                Chart(points) { p in
+                    LineMark(x: .value("idx", p.x), y: .value("W", p.y))
+                        .interpolationMethod(.monotone)
                         .foregroundStyle(sparkColor)
-                        .symbolSize(26)
+                    AreaMark(x: .value("idx", p.x), y: .value("W", p.y))
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(sparkColor.opacity(0.18))
+                    if p.id == lastID {
+                        PointMark(x: .value("idx", p.x), y: .value("W", p.y))
+                            .foregroundStyle(sparkColor)
+                            .symbolSize(26)
+                    }
                 }
-            }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine().foregroundStyle(AppColor.divider)
-                    AxisValueLabel {
-                        if let w = value.as(Double.self) {
-                            Text("\(Int(w.rounded()))")
-                                .font(AppFont.chartAxis)
-                                .foregroundStyle(AppColor.textSecondary)
+                .chartXAxis(.hidden)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                        AxisGridLine().foregroundStyle(.separator)
+                        AxisValueLabel {
+                            if let w = value.as(Double.self) {
+                                Text("\(Int(w.rounded()))")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
+                .frame(height: 64)
             }
-            .frame(height: 64)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
+    /// sparkline 描边色：充电绿、放电橙、其余系统次要色（仅图表内使用语义色）。
     private var sparkColor: Color {
         switch stream.latest?.status {
         case .charging: return AppColor.chargingActive
         case .discharging: return AppColor.discharging
-        default: return AppColor.chargingPaused
+        default: return .secondary
         }
     }
+
+    // MARK: - 操作行（钉底）
 
     private var actionRow: some View {
         HStack(spacing: 0) {
@@ -190,8 +227,8 @@ struct MenuBarPanel: View {
         }
     }
 
-    private var wattFormatter: (Double) -> String { { String(format: "%.1f", $0) } }
-    private var percentFormatter: (Double) -> String { { "\(Int($0))" } }
+    private func wattText(_ value: Double) -> String { String(format: "%.1f", value) }
+    private func percentText(_ value: Double) -> String { "\(Int(value))" }
 }
 
 private struct SparkPoint: Identifiable {
@@ -206,37 +243,7 @@ private struct SparkPoint: Identifiable {
     }
 }
 
-private struct MetricCell: View {
-    let label: String
-    let value: Double?
-    let formatter: (Double) -> String
-    let accent: Color
-    let theme: AppTheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label)
-                .font(AppFont.panelLabel)
-                .foregroundStyle(AppColor.textSecondary)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value.map(formatter) ?? "--")
-                    .font(AppFont.panelHeadline)
-                    .foregroundStyle(accent)
-                Text(unitText)
-                    .font(AppFont.unitSuffix)
-                    .foregroundStyle(AppColor.textSecondary)
-            }
-        }
-        .padding(AppSpacing.m)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .cardSurface(theme: theme)
-    }
-
-    private var unitText: String {
-        label.contains("电量") ? "%" : "W"
-    }
-}
-
+/// 操作行按钮：图标在上、文字在下，悬停时浅底反馈，全部使用系统语义文字色。
 private struct ActionButton: View {
     let icon: String
     let label: String
@@ -247,16 +254,20 @@ private struct ActionButton: View {
         Button(action: action) {
             VStack(spacing: AppSpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                 Text(label)
-                    .font(AppFont.buttonLabel)
+                    .font(.caption)
             }
-            .foregroundStyle(AppColor.textPrimary)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(hovering ? AppColor.bgTertiary : .clear)
-            .cornerRadius(AppRadius.s)
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.s, style: .continuous)
+                    .fill(hovering ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear))
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .accessibilityLabel(label)
     }
 }

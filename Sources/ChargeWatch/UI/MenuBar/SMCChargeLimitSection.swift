@@ -1,21 +1,18 @@
 import SwiftUI
 
-/// 面板内"充电上限"卡片——直接 SMC 控制（经 root helper），点一下即开。
-/// 核心控件为原生 SwiftUI Slider（步进 5%，区间 50...90，对齐 SMCChargeLimiter.steps），
-/// 配大号百分比读数、系统强调色填充、松手提交的弹簧动效与一格"已落定"的轻量缩放脉冲。
+/// 面板内"充电上限"分组——直接 SMC 控制（经 root helper），点一下即开。
+/// 采用 StayAwake 同款原生 `GroupBox` + 原生 `Toggle .switch` / `Slider` / `Button`，
+/// 文字一律 `.primary` / `.secondary`，滑块用系统强调色（`.tint`）。
+/// 核心控件为原生 Slider（步进 5%，区间 80...100，对齐 SMCChargeLimiter.steps），
 /// 仅在松手（onEditingChanged == false）写入 limiter，拖动途中不写盘，避免反复改写 SMC 配置。
 struct SMCChargeLimitSection: View {
     @EnvironmentObject private var limiter: SMCChargeLimiter
     @EnvironmentObject private var stream: SampleStream
-    @AppStorage("appTheme") private var themeRaw: String = AppTheme.classic.rawValue
-    private var theme: AppTheme { AppTheme(rawValue: themeRaw) ?? .classic }
 
     private var soc: Int? { stream.latest?.stateOfChargePercent }
 
     /// 拖动期间的就地草稿值；仅松手时写入 limiter，外部变化经 onChange 回灌。
     @State private var draft: Double = 80
-    /// 落定时的瞬时缩放脉冲，代替触觉反馈（macOS 13 无 sensoryFeedback）。
-    @State private var commitPulse = false
 
     /// 与 SMCChargeLimiter.steps（80/85/90/95/100）对齐：5% 步进、80...100 区间。
     private static let sliderRange: ClosedRange<Double> = 80...100
@@ -23,13 +20,13 @@ struct SMCChargeLimitSection: View {
     private static let tickValues: [Int] = SMCChargeLimiter.steps
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            header
-            content
+        GroupBox {
+            VStack(alignment: .leading, spacing: AppSpacing.s) {
+                header
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(AppSpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface(theme: theme)
         .onAppear { draft = clampToRange(Double(limiter.limit)) }
         .onChange(of: limiter.limit) { newValue in
             let synced = clampToRange(Double(newValue))
@@ -39,13 +36,9 @@ struct SMCChargeLimitSection: View {
 
     private var header: some View {
         HStack(spacing: AppSpacing.s) {
-            Image(systemName: AppIcon.chargeLimit)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColor.textSecondary)
-                .accessibilityHidden(true)
-            Text("充电上限")
-                .font(AppFont.panelLabel)
-                .foregroundStyle(AppColor.textSecondary)
+            Label("充电上限", systemImage: AppIcon.chargeLimit)
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.primary)
             Spacer()
             trailing.frame(minWidth: 56, alignment: .trailing)
         }
@@ -56,14 +49,18 @@ struct SMCChargeLimitSection: View {
             ProgressView().controlSize(.small)
         } else if limiter.enabled {
             Text("\(limiter.limit)%")
-                .font(AppFont.panelSubheadline)
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
                 .foregroundStyle(AppColor.chargingActive)
         } else if let soc {
             Text("\(soc)%")
-                .font(AppFont.panelSubheadline)
-                .foregroundStyle(AppColor.textPrimary)
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
         } else {
-            Text("—").font(AppFont.panelSubheadline).foregroundStyle(AppColor.textSecondary)
+            Text("—")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -71,40 +68,45 @@ struct SMCChargeLimitSection: View {
         if !limiter.installed {
             enablePrompt
         } else {
-            VStack(alignment: .leading, spacing: AppSpacing.m) {
-                Toggle("启用充电上限", isOn: Binding(
-                    get: { limiter.enabled },
-                    set: { $0 ? limiter.enable(limit: limiter.limit) : limiter.disable() }
-                ))
-                .font(AppFont.panelBody)
-                .disabled(limiter.busy)
+            Divider()
+            Toggle(isOn: Binding(
+                get: { limiter.enabled },
+                set: { $0 ? limiter.enable(limit: limiter.limit) : limiter.disable() }
+            )) {
+                rowLabel("启用充电上限", "将电量保持在设定上限附近")
+            }
+            .toggleStyle(.switch)
+            .disabled(limiter.busy)
 
-                if limiter.enabled {
-                    sliderControl
-                } else {
-                    disabledHint
-                }
+            if limiter.enabled {
+                sliderControl
+            } else {
+                disabledHint
             }
         }
         if let err = limiter.lastError {
-            Text(err).font(AppFont.panelCaption).foregroundStyle(AppColor.discharging)
+            Text(err)
+                .font(.caption)
+                .foregroundStyle(AppColor.discharging)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var enablePrompt: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
             Text("开启后将电量保持在上限附近。首次需授权安装后台组件（仅一次）。")
-                .font(AppFont.panelCaption)
-                .foregroundStyle(AppColor.textSecondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("开启充电上限") { limiter.enable(limit: 80) }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(limiter.busy)
         }
     }
 
     private var sliderControl: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
             readout
             Slider(
                 value: $draft,
@@ -114,7 +116,6 @@ struct SMCChargeLimitSection: View {
                     if !editing { commit() }
                 }
             )
-            .tint(AppColor.chargingActive)
             .disabled(limiter.busy)
             .accessibilityValue("\(Int(draft.rounded())) 百分比")
             tickRuler
@@ -124,20 +125,19 @@ struct SMCChargeLimitSection: View {
     private var readout: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text("\(Int(draft.rounded()))")
-                .font(AppFont.panelHeadline)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
                 .foregroundStyle(AppColor.chargingActive)
                 .contentTransition(.numericText())
-                .scaleEffect(commitPulse ? 1.06 : 1.0)
-                .animation(.spring(response: 0.32, dampingFraction: 0.6), value: commitPulse)
             Text("%")
-                .font(AppFont.unitSuffix)
-                .foregroundStyle(AppColor.textSecondary)
+                .font(.body)
+                .foregroundStyle(.secondary)
             Spacer()
             if let soc {
                 Text("当前 \(soc)%")
-                    .font(AppFont.panelCaption)
-                    .foregroundStyle(AppColor.textSecondary)
+                    .font(.caption)
                     .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -146,10 +146,10 @@ struct SMCChargeLimitSection: View {
         HStack(spacing: 0) {
             ForEach(Array(Self.tickValues.enumerated()), id: \.element) { index, tick in
                 Text("\(tick)")
-                    .font(AppFont.panelCaption)
+                    .font(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(
-                        Int(draft.rounded()) == tick ? AppColor.chargingActive : AppColor.textSecondary
+                        Int(draft.rounded()) == tick ? .primary : .secondary
                     )
                     .frame(maxWidth: .infinity,
                            alignment: tickAlignment(index: index, count: Self.tickValues.count))
@@ -160,8 +160,8 @@ struct SMCChargeLimitSection: View {
 
     private var disabledHint: some View {
         Text("已安装后台组件，打开开关即可设定上限。")
-            .font(AppFont.panelCaption)
-            .foregroundStyle(AppColor.textSecondary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -170,10 +170,6 @@ struct SMCChargeLimitSection: View {
         let value = Int(draft.rounded())
         guard value != limiter.limit else { return }
         limiter.setLimit(value)
-        commitPulse = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            commitPulse = false
-        }
     }
 
     private func clampToRange(_ value: Double) -> Double {
@@ -184,5 +180,16 @@ struct SMCChargeLimitSection: View {
         if index == 0 { return .leading }
         if index == count - 1 { return .trailing }
         return .center
+    }
+
+    private func rowLabel(_ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .foregroundStyle(.primary)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

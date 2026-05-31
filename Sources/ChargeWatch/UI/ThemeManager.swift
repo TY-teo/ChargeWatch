@@ -23,8 +23,9 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 extension View {
-    /// 面板背景。classic 用不透明窗口底；vibrancy 用系统原生 popover 材质，
-    /// 完全跟随系统深浅模式（不再强制浅色），与控制中心一致。
+    /// 面板背景。
+    /// vibrancy：用系统原生 popover 材质（behindWindow），读起来与系统菜单栏弹层 / 控制中心一致；
+    /// classic：不透明窗口底。两者都完全跟随系统深浅模式，不强制配色。
     @ViewBuilder
     func panelBackground(theme: AppTheme) -> some View {
         switch theme {
@@ -46,23 +47,17 @@ extension View {
         }
     }
 
-    /// 主题感知卡片表面。
-    /// classic：不透明控件底 + hairline，保持清晰层级。
-    /// vibrancy：不再叠第二层材质（避免 glass-on-glass），而是用 Color.primary.opacity
-    /// 派生的极淡色块抬升卡片，深浅模式自动反相，配 hairline 勾边。
+    /// 主题感知卡片表面（兼容保留）。
+    /// 菜单栏面板已统一改用原生 `GroupBox` 分组；此修饰符仅供 Settings / History /
+    /// Onboarding 等既有调用点继续编译，且视觉与原生 GroupBox 的分组底对齐：
+    /// 系统语义级极淡填充 + hairline 勾边，深浅模式自动反相，不叠第二层材质
+    /// （避免 glass-on-glass），也不引入品牌色。两种主题渲染一致，外观完全跟随系统。
     @ViewBuilder
     func cardSurface(theme: AppTheme, radius: CGFloat = AppRadius.m) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        switch theme {
-        case .classic:
-            self
-                .background(shape.fill(AppColor.bgSecondary))
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.05), lineWidth: 1))
-        case .vibrancy:
-            self
-                .background(shape.fill(Color.primary.opacity(0.05)))
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
-        }
+        self
+            .background(shape.fill(.quaternary.opacity(0.5)))
+            .overlay(shape.strokeBorder(.separator, lineWidth: 1))
     }
 
     /// 兼容保留：历史上用于强制玻璃主题浅色配色，现已废弃为 no-op，
