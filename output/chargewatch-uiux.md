@@ -395,7 +395,24 @@ banner → 2×2 指标 → 适配器行 → 最近60秒 → [充电上限卡片]
 - 失败分类反馈：权限被拒 → 状态 B′ 引导；退出码 0 但回读未变 → 判桥接配置错误，引导 onboarding；超时/其他 → caption 错误 + 深链。
 - 系统侧改动：面板打开时（`popoverWillShow`）立即回读 + 打开期间 ≤15s 轮询刷新选中；关闭即停（不后台 spawn）。
 
-### 13.7 本期裁剪
+## 14. v0.5 充电上限 UI/UX 重设计 + 玻璃主题原生重写（apple-native-ui）
+
+> 多 Agent 设计工作流产出，遵循 `apple-native-ui` skill。直接 SMC 控制（`SMCChargeLimitSection` + `SMCChargeLimiter`）。
+
+### 14.1 充电上限控件——原生滑块
+- 用**原生 SwiftUI `Slider`**（`in: 50...90, step: 5`，对齐 `SMCChargeLimiter.steps`），而非手搓段控/胶囊——继承系统滑块的点击定位、拖拽、方向键、焦点环、VoiceOver。
+- 大号 `panelHeadline` 百分比读数（`AppColor.chargingActive` 绿），`.contentTransition(.numericText())` 滚动数字；右侧"当前 NN%"电量参照（来自 `stream`）。
+- 刻度尺 50/60/70/80/90，当前档亮绿；滑块 `.tint(AppColor.chargingActive)`。
+- **仅松手提交**（`onEditingChanged == false`）→ `limiter.setLimit`，且值未变则不写盘，避免反复改写 SMC 配置；落定时 0.18s 轻量缩放脉冲代替触觉。
+- 未安装→"开启充电上限"按钮（首次授权安装 helper）；已安装未启用→开关 + 提示。
+
+### 14.2 玻璃主题原生重写（修正 v0.3 的反模式）
+- **不再强制 `colorScheme`**（v0.3 强制浅色是 apple-native-ui 点名的真实 bug，会致深色模式文字/叠底失效）：`VisualEffectView` 不设 appearance、`glassAppearance(_:)` 废弃为 no-op，**外观完全跟随系统深浅模式**。
+- **不再玻璃叠玻璃**：`cardSurface(.vibrancy)` 不再叠第二层 `.ultraThinMaterial`，改用 `Color.primary.opacity(0.05)` 派生淡色块 + hairline 抬升卡片，深浅自动反相。
+- `panelBackground(.vibrancy)` 用系统原生 `.popover` 材质、`windowBackground(.vibrancy)` 用 `.underWindowBackground`，与控制中心一致。
+- 已在**浅色/深色**离屏 + 真实玻璃截图双外观验证（`picture/charge-limit-redesign-*.png`）。
+
+## 13.7 本期裁剪（v0.4 旧记录）
 - **去掉**"已达上限，暂停充电"副文案：依赖代码中尚不存在的 `NotChargingReason`（`PowerSample`/`IORegistryReader` 未读取），且语义未确认。横幅已表达 acPaused。列为后续可选。
 
 ### 13.8 自检（沿用 §11 + 本节）

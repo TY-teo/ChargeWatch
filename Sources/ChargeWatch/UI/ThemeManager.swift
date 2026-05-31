@@ -23,31 +23,33 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 extension View {
+    /// 面板背景。classic 用不透明窗口底；vibrancy 用系统原生 popover 材质，
+    /// 完全跟随系统深浅模式（不再强制浅色），与控制中心一致。
     @ViewBuilder
     func panelBackground(theme: AppTheme) -> some View {
         switch theme {
         case .classic:
             background(AppColor.bgPrimary)
         case .vibrancy:
-            background(VisualEffectView(material: .popover, blendingMode: .behindWindow, forceAqua: true))
-                .glassAppearance(theme)
+            background(VisualEffectView(material: .popover, blendingMode: .behindWindow))
         }
     }
 
+    /// 独立窗口背景。classic 不透明；vibrancy 用窗下材质透出桌面，跟随系统外观。
     @ViewBuilder
     func windowBackground(theme: AppTheme) -> some View {
         switch theme {
         case .classic:
             background(AppColor.bgPrimary)
         case .vibrancy:
-            // 去掉旧版厚重蓝色水洗，换更干净的窗下材质并强制浅色，玻璃更亮更原生。
-            background(VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow, forceAqua: true))
-                .glassAppearance(theme)
+            background(VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow))
         }
     }
 
-    /// 主题感知卡片表面：classic 用不透明控件底，vibrancy 用半透明磨砂瓦片，
-    /// 二者均带 hairline 描边，保持卡片层级并与磨砂面板协调（替代直接铺 bgSecondary）。
+    /// 主题感知卡片表面。
+    /// classic：不透明控件底 + hairline，保持清晰层级。
+    /// vibrancy：不再叠第二层材质（避免 glass-on-glass），而是用 Color.primary.opacity
+    /// 派生的极淡色块抬升卡片，深浅模式自动反相，配 hairline 勾边。
     @ViewBuilder
     func cardSurface(theme: AppTheme, radius: CGFloat = AppRadius.m) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -57,23 +59,18 @@ extension View {
                 .background(shape.fill(AppColor.bgSecondary))
                 .overlay(shape.strokeBorder(Color.primary.opacity(0.05), lineWidth: 1))
         case .vibrancy:
-            // 用更实一些的材质 + 一层浅色叠底，提升瓦片亮度与可读性。
             self
-                .background(shape.fill(Color.white.opacity(0.5)))
-                .background(shape.fill(.regularMaterial))
-                .overlay(shape.strokeBorder(Color.black.opacity(0.06), lineWidth: 1))
+                .background(shape.fill(Color.primary.opacity(0.05)))
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
         }
     }
 
-    /// 玻璃主题强制浅色配色：语义色回到经典浅色变体，文字保持深色可读，避免暗模式霓虹色。
+    /// 兼容保留：历史上用于强制玻璃主题浅色配色，现已废弃为 no-op，
+    /// 外观一律跟随系统。保留签名以免调用点破裂。
+    @available(*, deprecated, message: "外观跟随系统，无需强制配色；此修饰符已为 no-op")
     @ViewBuilder
     func glassAppearance(_ theme: AppTheme) -> some View {
-        switch theme {
-        case .classic:
-            self
-        case .vibrancy:
-            environment(\.colorScheme, .light)
-        }
+        self
     }
 }
 
